@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: brandlens-backend
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "cd brandlens/backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: ENABLE_PUBLIC_DEMO
+        value: "true"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: LLM_PROVIDER
+        value: "auto"

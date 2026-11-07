@@ -1,5 +1,11 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
+
+try:
+    import email_validator  # noqa: F401
+    from pydantic import EmailStr
+except Exception:
+    EmailStr = str  # Resilient fallback if email-validator package is absent
 
 class Token(BaseModel):
     access_token: str
@@ -35,4 +41,3 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
-

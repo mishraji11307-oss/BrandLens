@@ -6,3 +6,4 @@
     "build": "npm --prefix brandlens/frontend install && npm --prefix brandlens/frontend run build"
   }
 }
+
