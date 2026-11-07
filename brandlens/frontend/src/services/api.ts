@@ -13,7 +13,12 @@ import {
   VisualAuditResult
 } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+const rawBase = (import.meta.env.VITE_API_BASE_URL || '/api').trim();
+const API_BASE = rawBase === '/api'
+  ? '/api'
+  : (rawBase.replace(/\/+$/, '').endsWith('/api')
+      ? rawBase.replace(/\/+$/, '')
+      : `${rawBase.replace(/\/+$/, '')}/api`);
 
 const api = axios.create({
   baseURL: API_BASE,
