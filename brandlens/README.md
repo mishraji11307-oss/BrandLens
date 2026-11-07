@@ -264,5 +264,12 @@ Interactive OpenAPI Swagger UI is available at **`/docs`** (or **`/redoc`**).
 
 ---
 
+## 11. License
+
+This project is open-source and licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.  
+Copyright (c) 2026 Team V4Vantage · Inkloom AI | CodeNexus India 2026.
+
+---
+
 *BrandLens — Built with pride by Team V4Vantage for Inkloom AI @ CodeNexus India 2026.*
 
