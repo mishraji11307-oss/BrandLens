@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "framework": "vite",
+  "installCommand": "npm --prefix brandlens/frontend install",
+  "buildCommand": "npm --prefix brandlens/frontend run build",
+  "outputDirectory": "brandlens/frontend/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
