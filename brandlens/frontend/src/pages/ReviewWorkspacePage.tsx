@@ -141,11 +141,35 @@ export const ReviewWorkspacePage: React.FC = () => {
     }
   };
 
-  if (loading || !submission) {
+  if (loading) {
     return (
       <div className="py-24 text-center text-slate-500 space-y-3">
         <RefreshCw className="w-8 h-8 animate-spin mx-auto text-brand-600" />
         <p className="text-xs font-bold text-slate-700">Loading Governance Review Workspace...</p>
+      </div>
+    );
+  }
+
+  if (!submission) {
+    return (
+      <div className="py-20 text-center max-w-md mx-auto space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-sm">
+          <AlertCircle className="w-7 h-7" />
+        </div>
+        <div>
+          <h3 className="text-base font-bold text-slate-900">Submission Not Found</h3>
+          <p className="text-xs text-slate-500 mt-1">
+            This submission could not be loaded or may have been deleted. You can start a new review or return to submission history.
+          </p>
+        </div>
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/history')}>
+            View History
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => navigate('/review')}>
+            New Content Review
+          </Button>
+        </div>
       </div>
     );
   }

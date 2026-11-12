@@ -11,3 +11,4 @@ services:
         generateValue: true
       - key: LLM_PROVIDER
         value: "auto"
+

@@ -96,6 +96,17 @@ export const brandKitService = {
       apply_to_kit_id: applyToKitId
     });
     return res.data;
+  },
+  getRegulatoryPacks: async (id: string) => {
+    const res = await api.get(`/brand-kits/${id}/regulatory-packs`);
+    return res.data;
+  },
+  toggleRegulatoryPack: async (id: string, packId: string, isActive: boolean) => {
+    const res = await api.post(`/brand-kits/${id}/regulatory-packs/toggle`, {
+      pack_id: packId,
+      is_active: isActive
+    });
+    return res.data;
   }
 };
 
@@ -119,6 +130,26 @@ export const contentService = {
   },
   runReview: async (id: string): Promise<ContentSubmission> => {
     const res = await api.post(`/content/review/${id}`);
+    return res.data;
+  },
+  resubmit: async (id: string, newText: string, changeSummary?: string): Promise<ContentSubmission> => {
+    const res = await api.post(`/content/${id}/resubmit`, {
+      new_text: newText,
+      change_summary: changeSummary
+    });
+    return res.data;
+  },
+  getRevisions: async (id: string) => {
+    const res = await api.get(`/content/${id}/revisions`);
+    return res.data;
+  },
+  extractOcr: async (file?: File, presetType?: string) => {
+    const formData = new FormData();
+    if (file) formData.append('file', file);
+    if (presetType) formData.append('preset_type', presetType);
+    const res = await api.post('/content/ocr-extract', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
     return res.data;
   },
   getRewrites: async (text: string, brand_kit_id?: string): Promise<Record<string, RewriteOption>> => {
@@ -186,6 +217,28 @@ export const approvalService = {
   addComment: async (submissionId: string, comment_text: string, comment_type: string = 'review_note'): Promise<Comment> => {
     const res = await api.post(`/approvals/${submissionId}/comments`, { comment_text, comment_type });
     return res.data;
+  },
+  getCertificatePdfUrl: (submissionId: string) => {
+    return `${API_BASE}/approvals/${submissionId}/certificate/pdf`;
+  }
+};
+
+export const notificationService = {
+  getAll: async () => {
+    const res = await api.get('/notifications');
+    return res.data;
+  },
+  markRead: async (id: string) => {
+    const res = await api.post(`/notifications/${id}/read`);
+    return res.data;
+  },
+  markAllRead: async () => {
+    const res = await api.post('/notifications/read-all');
+    return res.data;
+  },
+  seedDemo: async () => {
+    const res = await api.post('/notifications/seed-demo');
+    return res.data;
   }
 };
 
@@ -220,4 +273,3 @@ export const auditService = {
     return res.data;
   }
 };
-

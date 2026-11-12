@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api import auth, organisations, brand_kits, content, findings, approvals, insights, audit, visual
+from app.api import auth, organisations, brand_kits, content, findings, approvals, insights, audit, visual, notifications
 
 api_router = APIRouter()
 
@@ -12,4 +12,4 @@ api_router.include_router(approvals.router)
 api_router.include_router(insights.router)
 api_router.include_router(audit.router)
 api_router.include_router(visual.router)
-
+api_router.include_router(notifications.router)

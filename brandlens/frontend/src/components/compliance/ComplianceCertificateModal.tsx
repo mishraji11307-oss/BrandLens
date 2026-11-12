@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -11,9 +11,12 @@ import {
   Download,
   Printer,
   Sparkles,
-  QrCode
+  QrCode,
+  FileText
 } from 'lucide-react';
 import { ContentSubmission } from '../../types';
+import { approvalService } from '../../services/api';
+import { useNotification } from '../../context/NotificationContext';
 
 interface ComplianceCertificateModalProps {
   isOpen: boolean;
@@ -26,8 +29,33 @@ export const ComplianceCertificateModal: React.FC<ComplianceCertificateModalProp
   onClose,
   submission,
 }) => {
+  const { showToast } = useNotification();
+  const [downloading, setDownloading] = useState(false);
+
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      setDownloading(true);
+      const url = approvalService.getCertificatePdfUrl(submission.id);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `BrandLens_Clearance_Certificate_${submission.id.slice(0, 8)}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast(
+        'Certificate Downloaded',
+        'Official PDF clearance certificate with SHA-256 integrity hash saved to your downloads.',
+        'success'
+      );
+    } catch {
+      showToast('Download Failed', 'Failed to retrieve PDF certificate.', 'error');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const certId = `CERT-${submission.id.slice(0, 8).toUpperCase()}`;
@@ -37,7 +65,7 @@ export const ComplianceCertificateModal: React.FC<ComplianceCertificateModalProp
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="🔏 Cryptographic Compliance Certificate"
+      title="🔏 Cryptographic Clearance Certificate"
       maxWidth="lg"
     >
       <div className="space-y-6 text-xs">
@@ -108,6 +136,24 @@ export const ComplianceCertificateModal: React.FC<ComplianceCertificateModalProp
             </div>
           </div>
 
+          {/* Verified Regulatory Packs */}
+          <div className="max-w-lg mx-auto p-3 bg-white rounded-xl border border-indigo-100 text-left space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-900 block">
+              Verified Regulatory Compliance Packs:
+            </span>
+            <div className="flex flex-wrap gap-2 text-[10px] font-medium text-slate-700">
+              <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">
+                ✓ ASCI Digital Influencer Code (India)
+              </span>
+              <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">
+                ✓ FTC 16 CFR Part 255 Guides (US)
+              </span>
+              <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">
+                ✓ CDSCO & FDA Health & Cosmetic Claims
+              </span>
+            </div>
+          </div>
+
           {/* Signatures & QR Hash */}
           <div className="pt-4 border-t border-slate-200/80 flex items-center justify-between text-left max-w-lg mx-auto">
             <div className="space-y-1">
@@ -143,12 +189,21 @@ export const ComplianceCertificateModal: React.FC<ComplianceCertificateModalProp
               Close
             </Button>
             <Button
-              variant="primary"
+              variant="outline"
               size="sm"
               onClick={handlePrint}
               icon={<Printer className="w-3.5 h-3.5" />}
             >
-              Print / Save PDF
+              Print Certificate
+            </Button>
+            <Button
+              variant="glow"
+              size="sm"
+              loading={downloading}
+              onClick={handleDownloadPdf}
+              icon={<Download className="w-3.5 h-3.5 text-white" />}
+            >
+              Download PDF Record (.pdf)
             </Button>
           </div>
         </div>

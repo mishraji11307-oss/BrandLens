@@ -39,7 +39,50 @@ class UrlGenerateRequest(BaseModel):
     url: str
     apply_to_kit_id: Optional[str] = None
 
+class RegulatoryPackToggleRequest(BaseModel):
+    pack_id: str
+    is_active: bool
+
 router = APIRouter(prefix="/brand-kits", tags=["Brand Kits"])
+
+AVAILABLE_REGULATORY_PACKS = [
+    {
+        "id": "ASCI",
+        "name": "ASCI Digital Influencer & Marketing Code (India)",
+        "jurisdiction": "India",
+        "badge": "ASCI India",
+        "description": "Enforces Clause 1 upfront #Ad/#Collab disclosures and Chapter I.1 verified claims against unbacked market leadership superlatives.",
+        "rules_count": 2,
+        "clauses": [
+            "Clause 1: Upfront Disclosure (#Ad / #Collab within first 80 characters)",
+            "Chapter I.1: Honest Representations & Audited Superlative Claims"
+        ]
+    },
+    {
+        "id": "FTC",
+        "name": "FTC Endorsement & Testimonial Guides (US - 16 CFR Part 255)",
+        "jurisdiction": "United States",
+        "badge": "FTC US",
+        "description": "Enforces clear and conspicuous #Sponsored / #Ad disclosures for affiliate promotions and commercial brand collaborations.",
+        "rules_count": 1,
+        "clauses": [
+            "16 CFR § 255.5: Mandatory Disclosure of Material Connections & Incentives"
+        ]
+    },
+    {
+        "id": "HEALTH_CLAIMS",
+        "name": "CDSCO & FDA Health & Cosmetic Claims Standard",
+        "jurisdiction": "Global / US / India",
+        "badge": "FDA & CDSCO",
+        "description": "Strictly demarcates cosmetic beautifying claims from pharmaceutical drug claims. Flags curative disease promises without clinical trial certification.",
+        "rules_count": 3,
+        "clauses": [
+            "Section 4.1: Curative Drug Claims vs Cosmetic Beautifying Statements",
+            "Section 3.2: Prohibition of Absolute Outcome Guarantees",
+            "Mandatory Clinical Trial Dossier Verification"
+        ]
+    }
+]
 
 @router.post("/generate-from-url")
 def generate_brand_kit_from_url(
@@ -90,11 +133,11 @@ def generate_brand_kit_from_url(
                         brand_kit_id=kit.id,
                         rule_code=r["rule_code"],
                         title=r["title"],
-                        pattern=r["pattern"],
+                        pattern=r.get("pattern"),
                         severity=r["severity"],
                         category=r["category"],
-                        suggestion=r["suggestion"],
-                        citation=r["citation"],
+                        suggested_fix=r.get("suggested_fix", ""),
+                        evidence_citation=r.get("citation", ""),
                         is_active=True
                     )
                     db.add(new_rule)
@@ -109,10 +152,10 @@ def generate_brand_kit_from_url(
                     new_fact = ApprovedFact(
                         brand_kit_id=kit.id,
                         fact_code=f["fact_code"],
-                        title=f["title"],
-                        statement=f["statement"],
-                        source=f["source"],
-                        category=f["category"]
+                        name=f["title"],
+                        approved_value=f["statement"],
+                        supporting_source=f["source"],
+                        status="approved"
                     )
                     db.add(new_fact)
 
@@ -126,9 +169,10 @@ def generate_brand_kit_from_url(
                     new_claim = ApprovedClaim(
                         brand_kit_id=kit.id,
                         claim_code=c["claim_code"],
-                        claim_text=c["claim_text"],
-                        required_disclaimer=c["required_disclaimer"],
-                        category=c["category"]
+                        approved_statement=c["claim_text"],
+                        conditions=c.get("conditions", ""),
+                        supporting_evidence=c.get("supporting_evidence", ""),
+                        status="approved"
                     )
                     db.add(new_claim)
                     
@@ -136,7 +180,6 @@ def generate_brand_kit_from_url(
             log = AuditLog(
                 org_id=kit.org_id,
                 user_id=current_user.id,
-                user_name=current_user.full_name or "Admin",
                 action="BRAND_KIT_AUTO_GENERATED",
                 resource_type="brand_kit",
                 resource_id=kit.id,
@@ -159,7 +202,6 @@ def get_brand_kits(current_user: User = Depends(get_current_user), db: Session =
     org_id = membership.org_id if membership else None
     
     if not org_id:
-        # Fallback to demo org
         kit = db.query(BrandKit).first()
         return [kit] if kit else []
 
@@ -347,7 +389,6 @@ async def upload_guideline_document(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Save to disk
     safe_filename = f"{kit.id}_{os.path.basename(file.filename)}"
     file_path = os.path.join(settings.UPLOAD_DIR, safe_filename)
     with open(file_path, "wb") as f:
@@ -365,7 +406,6 @@ async def upload_guideline_document(
     db.add(doc)
     db.flush()
 
-    # Split text into chunks (~300 words each) and index
     text = extracted.get("text", "")
     paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 30]
     
@@ -389,3 +429,93 @@ async def upload_guideline_document(
         "chunks_indexed": min(len(paragraphs), 10)
     }
 
+@router.get("/{id}/regulatory-packs")
+def get_regulatory_packs(id: str, db: Session = Depends(get_db)):
+    """
+    Module: Regulatory Packs (ASCI, FTC, Health Claims)
+    Retrieves active and available regulatory compliance packs for this Brand Kit.
+    """
+    asset = db.query(BrandAsset).filter(
+        BrandAsset.brand_kit_id == id,
+        BrandAsset.asset_type == "regulatory_packs"
+    ).first()
+    
+    active_ids = ["ASCI", "FTC", "HEALTH_CLAIMS"]
+    if asset and asset.value:
+        try:
+            active_ids = json.loads(asset.value)
+        except Exception:
+            pass
+
+    packs = []
+    for p in AVAILABLE_REGULATORY_PACKS:
+        packs.append({
+            **p,
+            "is_active": p["id"] in active_ids
+        })
+
+    return {
+        "brand_kit_id": id,
+        "active_pack_ids": active_ids,
+        "packs": packs
+    }
+
+@router.post("/{id}/regulatory-packs/toggle")
+def toggle_regulatory_pack(
+    id: str,
+    req: RegulatoryPackToggleRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Toggles activation of standard regulatory rule packs (ASCI, FTC, Health Claims).
+    """
+    kit = db.query(BrandKit).filter(BrandKit.id == id).first()
+    if not kit:
+        raise HTTPException(status_code=404, detail="Brand Kit not found.")
+
+    asset = db.query(BrandAsset).filter(
+        BrandAsset.brand_kit_id == id,
+        BrandAsset.asset_type == "regulatory_packs"
+    ).first()
+
+    active_ids = ["ASCI", "FTC", "HEALTH_CLAIMS"]
+    if asset and asset.value:
+        try:
+            active_ids = json.loads(asset.value)
+        except Exception:
+            pass
+
+    if req.is_active:
+        if req.pack_id not in active_ids:
+            active_ids.append(req.pack_id)
+    else:
+        active_ids = [pid for pid in active_ids if pid != req.pack_id]
+
+    if asset:
+        asset.value = json.dumps(active_ids)
+    else:
+        asset = BrandAsset(
+            brand_kit_id=id,
+            asset_type="regulatory_packs",
+            name="Active Regulatory Rule Packs",
+            value=json.dumps(active_ids)
+        )
+        db.add(asset)
+
+    db.add(AuditLog(
+        org_id=kit.org_id,
+        user_id=current_user.id,
+        action="REGULATORY_PACK_TOGGLED",
+        resource_type="brand_kit",
+        resource_id=kit.id,
+        details={"pack_id": req.pack_id, "is_active": req.is_active, "active_packs": active_ids}
+    ))
+
+    db.commit()
+    return {
+        "status": "success",
+        "pack_id": req.pack_id,
+        "is_active": req.is_active,
+        "active_pack_ids": active_ids
+    }

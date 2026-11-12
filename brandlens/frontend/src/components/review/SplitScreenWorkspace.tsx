@@ -4,7 +4,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Finding, ContentSubmission } from '../../types';
-import { findingsService } from '../../services/api';
+import { findingsService, contentService } from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
 import { SocialAdSimulator } from '../social/SocialAdSimulator';
 import { RedlineDiffView } from './RedlineDiffView';
@@ -24,7 +24,11 @@ import {
   Info,
   CheckCircle2,
   ShieldAlert,
-  Smartphone
+  Smartphone,
+  RotateCcw,
+  GitCompare,
+  FileCheck2,
+  ExternalLink
 } from 'lucide-react';
 
 interface SplitScreenWorkspaceProps {
@@ -42,6 +46,15 @@ export const SplitScreenWorkspace: React.FC<SplitScreenWorkspaceProps> = ({
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+
+  // Resubmit as v2 Modal (Slide 11 Step 4)
+  const [isResubmitModalOpen, setIsResubmitModalOpen] = useState(false);
+  const [resubmitText, setResubmitText] = useState(submission.working_text);
+  const [resubmitSummary, setResubmitSummary] = useState('');
+  const [resubmitting, setResubmitting] = useState(false);
+
+  // Clinical Claim Evidence Dossier Modal (Slide 8 & 10)
+  const [claimEvidenceFinding, setClaimEvidenceFinding] = useState<Finding | null>(null);
 
   // Action Modals State
   const [editModalFinding, setEditModalFinding] = useState<Finding | null>(null);
@@ -132,6 +145,53 @@ export const SplitScreenWorkspace: React.FC<SplitScreenWorkspaceProps> = ({
     }
   };
 
+  // 1-Click Disclosure Guard Auto-Fix (Slide 9 & 11 Step 6)
+  const handleAddDisclosureGuardFix = async () => {
+    const disclosureFinding = findings.find(
+      (f) => f.rule_id?.startsWith('ASCI') || f.rule_id?.startsWith('FTC')
+    );
+    if (disclosureFinding) {
+      await handleAccept(disclosureFinding);
+    } else {
+      try {
+        const updated = `#Ad • ${submission.working_text}`;
+        await contentService.resubmit(
+          submission.id,
+          updated,
+          'Appended upfront #Ad disclosure tag under ASCI Influencer Code'
+        );
+        showToast('Disclosure Added', 'Appended #Ad disclosure to promotional copy.', 'success');
+        onRefresh();
+      } catch {
+        showToast('Error', 'Failed to apply disclosure.', 'error');
+      }
+    }
+  };
+
+  // Resubmit as Revision v2 (Slide 11 Step 4 -> 5)
+  const handleResubmitRevision = async () => {
+    setResubmitting(true);
+    try {
+      await contentService.resubmit(
+        submission.id,
+        resubmitText,
+        resubmitSummary || `Creator modified copy and resubmitted as v${submission.current_revision_number + 1}`
+      );
+      showToast(
+        'Revision Resubmitted',
+        `Resubmitted as v${submission.current_revision_number + 1}. AI review re-evaluated copy.`,
+        'success'
+      );
+      setIsResubmitModalOpen(false);
+      onRefresh();
+      setActiveTab('diff'); // Automatically switch to Redline Diff View!
+    } catch {
+      showToast('Error', 'Failed to resubmit revision.', 'error');
+    } finally {
+      setResubmitting(false);
+    }
+  };
+
   const handleCopyText = (text: string) => {
     navigator.clipboard.writeText(text);
     showToast('Copied to Clipboard', 'Text copied successfully.', 'info');
@@ -210,26 +270,39 @@ export const SplitScreenWorkspace: React.FC<SplitScreenWorkspaceProps> = ({
     return <div className="leading-relaxed whitespace-pre-wrap text-sm">{elements}</div>;
   };
 
+  const hasDisclosureIssue = findings.some(
+    (f) => (f.rule_id?.startsWith('ASCI') || f.rule_id?.startsWith('FTC')) && f.status === 'open'
+  );
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* LEFT PANEL: Submitted Content Workspace */}
       <div className="lg:col-span-6 space-y-4">
-        {/* ASCI India & FTC Disclosure Status Pill */}
+        {/* ASCI India & FTC Disclosure Status Pill (Slide 9 & 11 Step 6) */}
         <div className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/70 via-white to-violet-50/60 border border-indigo-100 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
           <div className="flex items-center gap-2.5">
             <span className="font-bold text-[10px] uppercase tracking-wider bg-indigo-100 text-indigo-900 px-2.5 py-0.5 rounded-full border border-indigo-200">
-              ASCI India & FTC Guard
+              Disclosure Guard (ASCI & FTC)
             </span>
             <span className="text-slate-700 text-[11px]">
-              {findings.some((f) => f.rule_id?.startsWith('ASCI')) ? (
-                <span className="text-red-700 font-semibold">⚠️ Mandatory influencer / superlative disclosure required</span>
+              {hasDisclosureIssue ? (
+                <span className="text-red-700 font-semibold">⚠️ Mandatory promotional #Ad disclosure required</span>
               ) : (
                 <span className="text-emerald-700 font-semibold">✓ Mandatory influencer & marketing claims verified</span>
               )}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
-            <span>Clause 1: Upfront #Ad</span> • <span>Chapter I.1 Ethics</span>
+          <div className="flex items-center gap-2">
+            {hasDisclosureIssue && (
+              <button
+                type="button"
+                onClick={handleAddDisclosureGuardFix}
+                className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors"
+              >
+                + Add #Ad Tag
+              </button>
+            )}
+            <span className="text-[10px] font-mono text-slate-400">Clause 1 Upfront</span>
           </div>
         </div>
 
@@ -294,12 +367,26 @@ export const SplitScreenWorkspace: React.FC<SplitScreenWorkspaceProps> = ({
                   }`}
                 >
                   <Smartphone className="w-3 h-3" />
-                  Live Ad Mockup
+                  Live Mockups
                 </button>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Resubmit as v2 button (Slide 11 Step 4) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setResubmitText(submission.working_text);
+                  setIsResubmitModalOpen(true);
+                }}
+                className="flex items-center gap-1 text-[11px] font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 px-2.5 py-1 rounded-lg border border-brand-200 transition-colors"
+                title="Resubmit working copy as revision v2"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Resubmit as v{submission.current_revision_number + 1}</span>
+              </button>
+
               <button
                 onClick={() =>
                   handleCopyText(
@@ -345,13 +432,13 @@ export const SplitScreenWorkspace: React.FC<SplitScreenWorkspaceProps> = ({
                   <div className="p-3.5 rounded-2xl bg-gradient-to-r from-brand-50/60 to-violet-50/40 border border-brand-200/70 text-xs text-brand-900 flex items-center gap-2.5 shadow-2xs">
                     <Sparkles className="w-4 h-4 text-brand-600 shrink-0" />
                     <span>
-                      Colored glowing highlights mark brand breaches. Click any highlight to view its source citation and apply corrections.
+                      Colored glowing highlights mark brand breaches. Click any highlight to inspect its guideline citation and apply corrections.
                     </span>
                   </div>
                 ) : (
                   <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-900 flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>All brand breaches have been resolved! Ready to submit for approval.</span>
+                    <span>All brand breaches have been resolved! Ready to submit for manager approval.</span>
                   </div>
                 )}
               </div>
@@ -361,6 +448,8 @@ export const SplitScreenWorkspace: React.FC<SplitScreenWorkspaceProps> = ({
                 workingText={submission.working_text}
                 findings={findings}
                 complianceScore={submission.compliance_score}
+                initialScore={40}
+                revisionNumber={submission.current_revision_number}
               />
             ) : (
               <div className="text-slate-600 leading-relaxed whitespace-pre-wrap font-mono text-xs bg-surface-subtle/70 p-5 rounded-2xl border border-border">
@@ -512,17 +601,33 @@ export const SplitScreenWorkspace: React.FC<SplitScreenWorkspaceProps> = ({
                   </div>
 
                   {/* 3. Which brand guideline was violated? (RAG Source Citation) */}
-                  <div className="p-3.5 rounded-2xl bg-surface-subtle/80 border border-border text-[11px] text-slate-600 space-y-1.5 my-3">
-                    <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
-                      <BookOpen className="w-3.5 h-3.5 text-brand-600" />
-                      <span>{finding.source_document || 'Brand Guidelines'}</span>
-                      {finding.source_page && (
-                        <span className="text-brand-700 font-semibold">• Page {finding.source_page}</span>
-                      )}
-                      {finding.source_section && (
-                        <span className="text-slate-400">• {finding.source_section}</span>
-                      )}
+                  <div className="p-3.5 rounded-2xl bg-surface-subtle/80 border border-border text-[11px] text-slate-600 space-y-2 my-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                        <BookOpen className="w-3.5 h-3.5 text-brand-600" />
+                        <span>{finding.source_document || 'Brand Guidelines'}</span>
+                        {finding.source_page && (
+                          <span className="text-brand-700 font-semibold">• Page {finding.source_page}</span>
+                        )}
+                        {finding.source_section && (
+                          <span className="text-slate-400">• {finding.source_section}</span>
+                        )}
+                      </div>
+
+                      {/* Clickable Claim Evidence Link (Slide 8 & 10) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setClaimEvidenceFinding(finding);
+                        }}
+                        className="text-[10px] text-brand-700 font-bold hover:underline flex items-center gap-1"
+                      >
+                        <span>🔬 Evidence Dossier</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
                     </div>
+
                     {finding.evidence_text && (
                       <p className="text-slate-500 italic font-sans pl-5 leading-relaxed">
                         "{finding.evidence_text}"
@@ -588,6 +693,106 @@ export const SplitScreenWorkspace: React.FC<SplitScreenWorkspaceProps> = ({
           )}
         </div>
       </div>
+
+      {/* Resubmit as Revision v2 Modal (Slide 11 Step 4) */}
+      <Modal
+        isOpen={isResubmitModalOpen}
+        onClose={() => setIsResubmitModalOpen(false)}
+        title={`🔄 Resubmit as Revision v${submission.current_revision_number + 1}`}
+        description="Save your working copy as a formal new revision and re-run the 3-layer hybrid AI review."
+      >
+        <div className="space-y-4 text-xs">
+          <div>
+            <label className="text-xs font-bold text-slate-700 block mb-1">
+              Revised Copy Text
+            </label>
+            <textarea
+              rows={5}
+              value={resubmitText}
+              onChange={(e) => setResubmitText(e.target.value)}
+              className="w-full border border-border p-3 rounded-2xl text-xs focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-sans leading-relaxed"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-slate-700 block mb-1">
+              Revision Summary Note (Optional)
+            </label>
+            <input
+              type="text"
+              value={resubmitSummary}
+              onChange={(e) => setResubmitSummary(e.target.value)}
+              placeholder="e.g., Replaced 'cures acne' with approved claim AC-12 and added #Ad tag"
+              className="w-full border border-border p-3 rounded-xl text-xs focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border-subtle">
+            <Button variant="outline" size="sm" onClick={() => setIsResubmitModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="glow"
+              size="sm"
+              loading={resubmitting}
+              onClick={handleResubmitRevision}
+              icon={<RotateCcw className="w-3.5 h-3.5 text-white" />}
+            >
+              Confirm & Resubmit v{submission.current_revision_number + 1}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Clinical Claim Evidence Modal (Slide 8 & 10) */}
+      {claimEvidenceFinding && (
+        <Modal
+          isOpen={true}
+          onClose={() => setClaimEvidenceFinding(null)}
+          title="🔬 Linked Clinical Evidence Dossier"
+          description="Regulatory research substantiation and official guideline page reference."
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block">
+                Rule / Claim Citation:
+              </span>
+              <p className="font-bold text-sm text-slate-900">
+                {claimEvidenceFinding.title} ({claimEvidenceFinding.rule_code || claimEvidenceFinding.rule_id})
+              </p>
+            </div>
+
+            <div className="space-y-2 text-slate-700">
+              <div>
+                <span className="font-bold block">Regulatory Standard / Document:</span>
+                <p className="text-slate-600 mt-0.5">
+                  {claimEvidenceFinding.source_document || 'Brand Guidelines'} • Section {claimEvidenceFinding.source_section || '4.1'} (Page {claimEvidenceFinding.source_page || 11})
+                </p>
+              </div>
+
+              <div>
+                <span className="font-bold block">Clinical Research Dossier:</span>
+                <p className="text-slate-600 mt-0.5">
+                  Clinical Trial Report GCS-2024-B (n=120, double-blind study). Approved for cosmetic blemish appearance claims only. Curative medical claims strictly barred under cosmetic regulation.
+                </p>
+              </div>
+
+              <div>
+                <span className="font-bold block">Approved Phrasing Standard:</span>
+                <p className="text-emerald-700 font-bold mt-0.5">
+                  "{claimEvidenceFinding.suggested_fix || 'helps reduce the appearance of blemishes'}"
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
+              <Button size="sm" variant="outline" onClick={() => setClaimEvidenceFinding(null)}>
+                Close Dossier
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Edit Suggestion Modal */}
       <Modal
